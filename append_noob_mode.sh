@@ -1,13 +1,26 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}QuantCore Dashboard{% endblock %}</title>
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/static/css/style.css">
+#!/bin/bash
+# ============================================================================
+# QuantCore: Universal Pro/Edu Mode Toggle
+# Adds an interactive educational layer across the entire application
+# ============================================================================
+set -euo pipefail
 
+echo "=========================================="
+echo " Installing Universal Edu Mode Toggle"
+echo "=========================================="
+
+source .venv/bin/activate
+
+python << 'EOF'
+import os
+import re
+
+print("[1/3] Injecting Global Toggle, Drawer, and Dictionary into base.html...")
+with open("web/templates/base.html", "r") as f:
+    base_html = f.read()
+
+# 1. CSS for the toggle, drawer, and mode-specific visibility
+css_injection = """
 <style>
     /* Toggle Switch */
     .mode-switch { position: relative; display: inline-block; width: 44px; height: 24px; }
@@ -36,28 +49,10 @@
     }
     body.mode-edu [data-term]:hover { color: #bfdbfe; }
 </style>
+"""
 
-</head>
-<body class="bg-gray-900 text-gray-100">
-    <nav class="bg-gray-800 border-b border-gray-700">
-        <div class="container mx-auto px-4">
-            <div class="flex items-center justify-between h-16">
-                <div class="flex items-center">
-                    <span class="text-xl font-bold text-blue-400">⚡ QuantCore</span>
-                    <div class="ml-10 flex space-x-4">
-                        <a href="/" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-700 {% if request.url.path == '/' %}bg-gray-700{% endif %}">Dashboard</a>
-                        <a href="/trends" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-700 {% if request.url.path == '/trends' %}bg-gray-700{% endif %}">Trends</a>
-                        <a href="/predictions" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-700 {% if request.url.path == '/predictions' %}bg-gray-700{% endif %}">Predictions</a>
-                        <a href="/backtest" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-700 {% if request.url.path == '/backtest' %}bg-gray-700{% endif %} text-green-400 font-bold">Backtest Lab</a>
-                        <a href="/alpha" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-700 {% if request.url.path == '/alpha' %}bg-gray-700{% endif %} text-purple-400 font-bold">Alpha Lab</a>
-                        <a href="/nexus" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-700 {% if request.url.path == '/nexus' %}bg-gray-700{% endif %} text-red-400 font-bold">Nexus HFT</a>
-                        <a href="/research" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-700 {% if request.url.path == '/research' %}bg-gray-700{% endif %}">Research Lab</a>
-                        <a href="/execution" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-700 {% if request.url.path == '/execution' %}bg-gray-700{% endif %}">Execution</a>
-                        <a href="/signals" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-700 {% if request.url.path == '/signals' %}bg-gray-700{% endif %}">Signals</a>
-                    </div>
-                </div>
-                <div class="flex items-center space-x-4">
-                    <span class="text-sm text-green-400">● System Active</span>
+# 2. The Toggle Switch HTML (Injected into the Nav Bar)
+toggle_html = """
     <div class="flex items-center space-x-3 border-l border-gray-700 pl-4 ml-4">
         <span class="text-xs text-gray-400 pro-only">PRO</span>
         <span class="text-xs text-blue-400 font-bold edu-only">LEARN</span>
@@ -66,19 +61,10 @@
             <span class="mode-slider"></span>
         </label>
     </div>
+"""
 
-                </div>
-            </div>
-        </div>
-    </nav>
-
-    <main class="container mx-auto px-4 py-8">
-        {% block content %}{% endblock %}
-    </main>
-
-    <script src="/static/js/app.js"></script>
-    {% block scripts %}{% endblock %}
-
+# 3. The Slide-Out Drawer HTML (Injected before </body>)
+drawer_html = """
 <!-- Edu Mode Overlay -->
 <div id="edu-overlay" class="fixed inset-0 bg-black/50 z-40 opacity-0 pointer-events-none" onclick="closeEduDrawer()"></div>
 
@@ -101,7 +87,10 @@
         </div>
     </div>
 </div>
+"""
 
+# 4. The JavaScript Dictionary and Logic
+js_injection = """
 <script>
 const EDU_TERMS = {
     sharpe_ratio: {
@@ -215,6 +204,69 @@ function closeEduDrawer() {
     overlay.classList.remove('open');
 }
 </script>
+"""
 
-</body>
-</html>
+# Apply injections to base.html
+if "global-mode-toggle" not in base_html:
+    base_html = base_html.replace("</head>", css_injection + "\n</head>")
+    base_html = base_html.replace('<span class="text-sm text-green-400">● System Active</span>', '<span class="text-sm text-green-400">● System Active</span>' + toggle_html)
+    base_html = base_html.replace("</body>", drawer_html + js_injection + "\n</body>")
+
+    with open("web/templates/base.html", "w") as f:
+        f.write(base_html)
+    print("✅ base.html patched.")
+
+print("[2/3] Tagging key metrics across all pages with data-term attributes...")
+
+# Dictionary of files and the text replacements to add data-term tags
+patches = {
+    "web/templates/dashboard.html": [
+        ('<h3 class="text-sm font-medium text-gray-400">Sharpe Ratio</h3>', '<h3 class="text-sm font-medium text-gray-400"><span data-term="sharpe_ratio">Sharpe Ratio</span></h3>'),
+        ('<h3 class="text-sm font-medium text-gray-400">Max Drawdown</h3>', '<h3 class="text-sm font-medium text-gray-400"><span data-term="max_drawdown">Max Drawdown</span></h3>')
+    ],
+    "web/templates/trends.html": [
+        ('<h3 class="text-sm font-medium text-gray-400">Z-Score</h3>', '<h3 class="text-sm font-medium text-gray-400"><span data-term="z_score">Z-Score</span></h3>'),
+        ('name: \'SMA 20\'', 'name: \'<span data-term="sma">SMA 20</span>\'')
+    ],
+    "web/templates/nexus.html": [
+        ('<h3 class="text-sm font-medium text-gray-400">p99 Latency</h3>', '<h3 class="text-sm font-medium text-gray-400"><span data-term="p99_latency">p99 Latency</span></h3>'),
+        ('<h2 class="text-xl font-bold mb-4">Live Limit Order Book</h2>', '<h2 class="text-xl font-bold mb-4"><span data-term="lob">Live Limit Order Book</span></h2>'),
+        ('SPSC Ring Buffer', '<span data-term="spsc">SPSC Ring Buffer</span>')
+    ],
+    "web/templates/execution.html": [
+        ('<option value="VWAP" selected>VWAP (Volume-Weighted)</option>', '<option value="VWAP" selected data-term="vwap">VWAP (Volume-Weighted)</option>'),
+        ('<h3 class="text-sm font-medium text-gray-400">Slippage (bps)</h3>', '<h3 class="text-sm font-medium text-gray-400"><span data-term="slippage">Slippage (bps)</span></h3>')
+    ],
+    "web/templates/research.html": [
+        ('<h2 class="text-xl font-bold mb-4">Hierarchical Risk Parity (HRP) Allocation</h2>', '<h2 class="text-xl font-bold mb-4"><span data-term="hrp">Hierarchical Risk Parity (HRP)</span> Allocation</h2>'),
+        ('<h2 class="text-xl font-bold mb-4">Model Integrity (DSR)</h2>', '<h2 class="text-xl font-bold mb-4">Model Integrity (<span data-term="dsr">DSR</span>)</h2>')
+    ],
+    "web/templates/alpha.html": [
+        ('<h1 class="text-3xl font-bold text-purple-400">Alpha Lab: Information Flow</h1>', '<h1 class="text-3xl font-bold text-purple-400">Alpha Lab: <span data-term="lead_lag">Information Flow</span></h1>')
+    ],
+    "web/templates/backtest.html": [
+        ('<h3 class="text-xs font-medium text-gray-400 uppercase">CAGR</h3>', '<h3 class="text-xs font-medium text-gray-400 uppercase"><span data-term="cagr">CAGR</span></h3>'),
+        ('<h3 class="text-xs font-medium text-gray-400 uppercase">Avg Daily Turnover</h3>', '<h3 class="text-xs font-medium text-gray-400 uppercase">Avg Daily <span data-term="turnover">Turnover</span></h3>')
+    ]
+}
+
+for file_path, replacements in patches.items():
+    if os.path.exists(file_path):
+        with open(file_path, "r") as f:
+            content = f.read()
+
+        changed = False
+        for old, new in replacements:
+            if old in content and new not in content:
+                content = content.replace(old, new)
+                changed = True
+
+        if changed:
+            with open(file_path, "w") as f:
+                f.write(content)
+            print(f"  ✅ Tagged metrics in {os.path.basename(file_path)}")
+
+print("\n==========================================")
+print(" ✅ UNIVERSAL EDU MODE INSTALLED!")
+print("==========================================")
+EOF
